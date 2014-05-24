@@ -119,6 +119,7 @@ public:
 
         vector<int> best_res;
         ll best_score = -114514;
+        pair<ll, ll> best_ha;
         for (int tekito = 0; tekito <= n; tekito += 4)
         {
             if (g_timer.get_elapsed() > 9.8 * 1000)
@@ -152,9 +153,10 @@ public:
             if (score > best_score)
             {
                 best_score = score;
+                best_ha = ha;
                 best_res = make_result();
 
-//                 fprintf(stderr, "%4d: %lld, %lld -> %lld\n", tekito, ha.first, ha.second, score);
+                fprintf(stderr, "%4d: %3lld, %11lld -> %lld\n", tekito, ha.first, ha.second, score);
             }
         }
         return best_res;
