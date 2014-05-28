@@ -60,6 +60,12 @@ void fast_io() { cin.tie(0); ios::sync_with_stdio(false); }
 bool in_rect(int x, int y, int w, int h) { return 0 <= x && x < w && 0 <= y && y < h; }
 
 
+typedef pair<int, int> pint;
+typedef long long ll;
+
+const int DX[] = { 0, 1, 0, -1 };
+const int DY[] = { 1, 0, -1, 0 };
+
 
 #ifdef _MSC_VER
 #include <Windows.h>
@@ -89,17 +95,142 @@ public:
 };
 
 
+enum Dir
+{
+    UP,
+    RIGHT,
+    DOWN,
+    LEFT,
 
+    NA,
+};
+const string dir_s[] = { "UP", "RIGHT", "DOWN", "LEFT", "NA" };
+Dir to_dir(const string& s)
+{
+    int i = find(dir_s, dir_s + 4, s) - dir_s;
+    assert(0 <= i && i < 4);
+    return Dir(i);
+}
+Dir rev_dir(Dir dir)
+{
+    return Dir((dir + 2) % 4);
+}
+struct Pos
+{
+    int x, y;
+    Pos(int x, int y)
+        : x(x), y(y)
+    {
+    }
+    Pos()
+        : x(0), y(0)
+    {
+    }
 
-typedef pair<int, int> pint;
-typedef long long ll;
+    bool operator==(const Pos& other) const
+    {
+        return x == other.x && y == other.y;
+    }
+    bool operator !=(const Pos& other) const
+    {
+        return x != other.x || y != other.y;
+    }
 
-const int DX[] = { 0, 1, 0, -1 };
-const int DY[] = { 1, 0, -1, 0 };
+    void operator+=(const Pos& other)
+    {
+        x += other.x;
+        y += other.y;
+    }
+    void operator-=(const Pos& other)
+    {
+        x -= other.x;
+        y -= other.y;
+    }
+
+    Pos operator+(const Pos& other) const
+    {
+        Pos res = *this;
+        res += other;
+        return res;
+    }
+    Pos operator-(const Pos& other) const
+    {
+        Pos res = *this;
+        res -= other;
+        return res;
+    }
+    Pos operator*(int a) const
+    {
+        return Pos(x * a, y * a);
+    }
+
+    bool operator<(const Pos& other) const
+    {
+        if (x != other.x)
+            return x < other.x;
+        else
+            return y < other.y;
+    }
+};
+Pos operator*(int a, const Pos& cell)
+{
+    return cell * a;
+}
+Pos to_cell(Dir dir)
+{
+    assert(0 <= dir && dir < 4);
+    return Pos(DX[dir], DY[dir]);
+}
+namespace std
+{
+    ostream& operator<<(ostream& os, Dir dir)
+    {
+        os << dir_s[dir];
+        return os;
+    }
+
+    ostream& operator<<(ostream& os, const Pos& c)
+    {
+        char buf[256];
+        sprintf(buf, "(%d, %d)", c.x, c.y);
+        os << buf;
+        return os;
+    }
+}
+
 
 const int MAX_RANGE = ten(6);
 const int LOWER = -MAX_RANGE;
 const int UPPER = MAX_RANGE;
+
+
+class InputRect
+{
+public:
+    InputRect(int a, int b, int index)
+        : w(a), h(b), index_(index), rotated_(false)
+    {
+    }
+    InputRect()
+        : index_(-810114514){}
+
+    int width() const { return w; }
+    int height() const { return h; }
+    int index() const { return index_; }
+    bool rotated() const { return rotated_; }
+    void rotate()
+    {
+        swap(w, h);
+        rotated_ ^= true;
+    }
+
+private:
+    int w, h;
+    int index_;
+    bool rotated_;
+};
+
+
 
 class RectanglesAndHoles
 {
@@ -114,8 +245,13 @@ public:
         this->b = b;
         n = a.size();
 
+        map<int, int> freq;
+        rep(i, n)
+            ++freq[max(a[i], b[i]) / 100];
+        for (auto it : freq)
+            fprintf(stderr, "%3d: %d\n", it.first, it.second);
+
         vector<int> len_order = sorted_by_len();
-//         reverse(all(len_order));
 
         vector<int> best_res;
         ll best_score = -114514;
@@ -136,6 +272,7 @@ public:
                     square.push_back(len_order[i]);
             }
 
+            reverse(all(square));
             make_big_square(square);
             make_tekito_holes(hole);
 
