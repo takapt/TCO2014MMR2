@@ -230,6 +230,154 @@ private:
     bool rotated_;
 };
 
+struct RectState
+{
+    RectState()
+        : pos(-114514, -1919810), rotated(false)
+    {
+    }
+
+    bool used()
+    {
+        return pos.x != -114514;
+    }
+
+    Pos pos;
+    bool rotated;
+};
+
+class Solver
+{
+public:
+    Solver(vector<int> a, vector<int> b)
+        : n(a.size()), rect_states(n)
+    {
+        rep(i, n)
+            input_rects.push_back(InputRect(a[i], b[i], i));
+    }
+
+    void solve()
+    {
+        vector<int> len_order;
+        rep(i, n)
+            len_order.push_back(i);
+        sort_by_long_side(len_order);
+        reverse(all(len_order));
+        make_big_square(len_order);
+    }
+
+    void sort_by_long_side(vector<int>& order)
+    {
+        sort(all(order),
+            [&](int i, int j)
+            {
+                assert(0 <= i && i < n);
+                assert(0 <= j && j < n);
+                return max(input_rects[i].width(), input_rects[i].height()) < max(input_rects[j].width(), input_rects[j].height());
+            });
+    }
+
+    void make_big_square(vector<int> use_rects)
+    {
+        vector<int> sides[4];
+        int sum_len[4] = {};
+        for (int rect_i : use_rects)
+        {
+            int len = max(input_rects[rect_i].width(), input_rects[rect_i].height());
+            int k = min_element(sum_len, sum_len + 4) - sum_len;
+            sum_len[k] += len;
+            sides[k].push_back(rect_i);
+        }
+
+        pint order[4];
+        rep(i, 4)
+            order[i] = pint(sum_len[i], i);
+        sort(order, order + 4, greater<pint>());
+
+        const int width = order[1].first;
+        const int height = order[3].first;
+
+        // 0 bottom
+        {
+            int x = 0;
+            for (int ri : sides[order[0].second])
+            {
+                int high = max(input_rects[ri].width(), input_rects[ri].height());
+                int low = min(input_rects[ri].width(), input_rects[ri].height());
+                assert(rect_states[ri].rotated == -1);
+                rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 0 : 1;
+                rect_states[ri].pos = Pos(x, -low);
+
+                x += high;
+            }
+        }
+
+        // 1 top
+        {
+            int x = 0;
+            for (int ri : sides[order[1].second])
+            {
+                int high = max(input_rects[ri].width(), input_rects[ri].height());
+                int low = min(input_rects[ri].width(), input_rects[ri].height());
+                assert(rect_states[ri].rotated == -1);
+                rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 0 : 1;
+                rect_states[ri].pos = Pos(x, height);
+
+                x += high;
+            }
+        }
+
+        // 2 left
+        {
+            int y = 0;
+            for (int ri : sides[order[2].second])
+            {
+                int high = max(input_rects[ri].width(), input_rects[ri].height());
+                int low = min(input_rects[ri].width(), input_rects[ri].height());
+                assert(rect_states[ri].rotated == -1);
+                rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 1 : 0;
+                rect_states[ri].pos = Pos(-low, y);
+
+                y += high;
+            }
+        }
+
+        // 3 right
+        {
+            int y = 0;
+            for (int ri : sides[order[3].second])
+            {
+                int high = max(input_rects[ri].width(), input_rects[ri].height());
+                int low = min(input_rects[ri].width(), input_rects[ri].height());
+                assert(rect_states[ri].rotated == -1);
+                rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 1 : 0;
+                rect_states[ri].pos = Pos(width, y);
+
+                y += high;
+            }
+        }
+    }
+
+    vector<int> make_result()
+    {
+        vector<int> res;
+        rep(i, n)
+        {
+            auto& s = rect_states[i];
+            assert(s.used());
+            res.push_back(s.pos.x);
+            res.push_back(s.pos.y);
+            res.push_back(s.rotated);
+        }
+        return res;
+    }
+
+private:
+    const int n;
+    vector<InputRect> input_rects;
+
+    vector<RectState> rect_states;
+};
 
 
 class RectanglesAndHoles
@@ -237,6 +385,10 @@ class RectanglesAndHoles
 public:
     vector<int> place(vector<int> a, vector<int> b)
     {
+        Solver solver(a, b);
+        solver.solve();
+        return solver.make_result();
+
         const double G_TLE = 10 * 1000;
         Timer g_timer;
         g_timer.start();
@@ -245,13 +397,29 @@ public:
         this->b = b;
         n = a.size();
 
-        map<int, int> freq;
-        rep(i, n)
-            ++freq[max(a[i], b[i]) / 100];
-        for (auto it : freq)
-            fprintf(stderr, "%3d: %d\n", it.first, it.second);
+//         map<int, int> freq;
+//         rep(i, n)
+//             ++freq[max(a[i], b[i])];
+//         for (auto it : freq)
+//             fprintf(stderr, "%3d: %d\n", it.first, it.second);
 
         vector<int> len_order = sorted_by_len();
+        int cc = 0;
+        for (int i : len_order)
+        {
+            int low = min(a[i], b[i]);
+            int high = max(a[i], b[i]);
+            if (high / low > 2 || high < 100)
+            {
+                fprintf(stderr, "%3d, %3d\n", low, high);
+                ++cc;
+            }
+        }
+        dump(cc);
+        reverse(all(len_order));
+        make_big_square(len_order);
+
+        return make_result();
 
         vector<int> best_res;
         ll best_score = -114514;
@@ -438,15 +606,11 @@ public:
 
     vector<int> sorted_by_len()
     {
-        vector<pint> v;
+        vector<int> order(n);
         rep(i, n)
-            v.push_back(pint(max(a[i], b[i]), i));
-        sort(all(v));
-
-        vector<int> res;
-        rep(i, n)
-            res.push_back(v[i].second);
-        return res;
+            order[i] = i;
+        sort(all(order), [&](int i, int j) { return max(a[i], b[i]) < max(a[j], b[j]); });
+        return order;
     }
 
     pair<ll, ll> eval()
