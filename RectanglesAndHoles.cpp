@@ -1,4 +1,4 @@
-#define NDEBUG
+// #define NDEBUG
 
 #include <cstdio>
 #include <cstdlib>
@@ -266,15 +266,19 @@ public:
         make_big_square(len_order);
     }
 
+    bool check_rect_indices(const vector<int>& rect_i)
+    {
+        if (rect_i.empty())
+            return true;
+        auto v = rect_i;
+        uniq(v);
+        return v.size() == rect_i.size() && 0 <= v.front() && v.back() < n;
+    }
+
     void sort_by_long_side(vector<int>& order)
     {
-        sort(all(order),
-            [&](int i, int j)
-            {
-                assert(0 <= i && i < n);
-                assert(0 <= j && j < n);
-                return max(input_rects[i].width(), input_rects[i].height()) < max(input_rects[j].width(), input_rects[j].height());
-            });
+        assert(check_rect_indices(order));
+        sort(all(order), [&](int i, int j) { return max(input_rects[i].width(), input_rects[i].height()) < max(input_rects[j].width(), input_rects[j].height()); });
     }
 
     void make_big_square(vector<int> use_rects)
@@ -304,7 +308,7 @@ public:
             {
                 int high = max(input_rects[ri].width(), input_rects[ri].height());
                 int low = min(input_rects[ri].width(), input_rects[ri].height());
-                assert(rect_states[ri].rotated == -1);
+                assert(!rect_states[ri].used());
                 rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 0 : 1;
                 rect_states[ri].pos = Pos(x, -low);
 
@@ -319,7 +323,7 @@ public:
             {
                 int high = max(input_rects[ri].width(), input_rects[ri].height());
                 int low = min(input_rects[ri].width(), input_rects[ri].height());
-                assert(rect_states[ri].rotated == -1);
+                assert(!rect_states[ri].used());
                 rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 0 : 1;
                 rect_states[ri].pos = Pos(x, height);
 
@@ -334,7 +338,7 @@ public:
             {
                 int high = max(input_rects[ri].width(), input_rects[ri].height());
                 int low = min(input_rects[ri].width(), input_rects[ri].height());
-                assert(rect_states[ri].rotated == -1);
+                assert(!rect_states[ri].used());
                 rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 1 : 0;
                 rect_states[ri].pos = Pos(-low, y);
 
@@ -349,7 +353,7 @@ public:
             {
                 int high = max(input_rects[ri].width(), input_rects[ri].height());
                 int low = min(input_rects[ri].width(), input_rects[ri].height());
-                assert(rect_states[ri].rotated == -1);
+                assert(!rect_states[ri].used());
                 rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 1 : 0;
                 rect_states[ri].pos = Pos(width, y);
 
