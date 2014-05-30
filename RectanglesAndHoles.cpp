@@ -204,14 +204,14 @@ const int LOWER = -MAX_RANGE;
 const int UPPER = MAX_RANGE;
 
 
-class InputRect
+class Rect
 {
 public:
-    InputRect(int a, int b, int index)
-        : w(a), h(b), index_(index), rotated_(false)
+    Rect(int a, int b, int index)
+        : w(a), h(b), index_(index), rotated_(false), pos_(-1919810, -114514)
     {
     }
-    InputRect()
+    Rect()
         : index_(-810114514){}
 
     int width() const { return w; }
@@ -224,36 +224,32 @@ public:
         rotated_ ^= true;
     }
 
+    const Pos& pos() const { return pos_; }
+    void set_pos(const Pos& pos)
+    {
+        pos_ = pos;
+    }
+
+    bool used() const
+    {
+        return pos_.x != -1919810;
+    }
+
 private:
     int w, h;
     int index_;
     bool rotated_;
-};
-
-struct RectState
-{
-    RectState()
-        : pos(-114514, -1919810), rotated(false)
-    {
-    }
-
-    bool used()
-    {
-        return pos.x != -114514;
-    }
-
-    Pos pos;
-    bool rotated;
+    Pos pos_;
 };
 
 class Solver
 {
 public:
     Solver(vector<int> a, vector<int> b)
-        : n(a.size()), rect_states(n)
+        : n(a.size()), rects(n)
     {
         rep(i, n)
-            input_rects.push_back(InputRect(a[i], b[i], i));
+            rects[i] = Rect(a[i], b[i], i);
     }
 
     void solve()
@@ -278,7 +274,7 @@ public:
     void sort_by_long_side(vector<int>& order)
     {
         assert(check_rect_indices(order));
-        sort(all(order), [&](int i, int j) { return max(input_rects[i].width(), input_rects[i].height()) < max(input_rects[j].width(), input_rects[j].height()); });
+        sort(all(order), [&](int i, int j) { return max(rects[i].width(), rects[i].height()) < max(rects[j].width(), rects[j].height()); });
     }
 
     void make_big_square(vector<int> use_rects)
@@ -287,7 +283,7 @@ public:
         int sum_len[4] = {};
         for (int rect_i : use_rects)
         {
-            int len = max(input_rects[rect_i].width(), input_rects[rect_i].height());
+            int len = max(rects[rect_i].width(), rects[rect_i].height());
             int k = min_element(sum_len, sum_len + 4) - sum_len;
             sum_len[k] += len;
             sides[k].push_back(rect_i);
@@ -306,11 +302,12 @@ public:
             int x = 0;
             for (int ri : sides[order[0].second])
             {
-                int high = max(input_rects[ri].width(), input_rects[ri].height());
-                int low = min(input_rects[ri].width(), input_rects[ri].height());
-                assert(!rect_states[ri].used());
-                rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 0 : 1;
-                rect_states[ri].pos = Pos(x, -low);
+                int high = max(rects[ri].width(), rects[ri].height());
+                int low = min(rects[ri].width(), rects[ri].height());
+                assert(!rects[ri].used());
+                if (rects[ri].width() < rects[ri].height())
+                    rects[ri].rotate();
+                rects[ri].set_pos(Pos(x, -low));
 
                 x += high;
             }
@@ -321,11 +318,12 @@ public:
             int x = 0;
             for (int ri : sides[order[1].second])
             {
-                int high = max(input_rects[ri].width(), input_rects[ri].height());
-                int low = min(input_rects[ri].width(), input_rects[ri].height());
-                assert(!rect_states[ri].used());
-                rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 0 : 1;
-                rect_states[ri].pos = Pos(x, height);
+                int high = max(rects[ri].width(), rects[ri].height());
+                int low = min(rects[ri].width(), rects[ri].height());
+                assert(!rects[ri].used());
+                if (rects[ri].width() < rects[ri].height())
+                    rects[ri].rotate();
+                rects[ri].set_pos(Pos(x, height));
 
                 x += high;
             }
@@ -336,11 +334,12 @@ public:
             int y = 0;
             for (int ri : sides[order[2].second])
             {
-                int high = max(input_rects[ri].width(), input_rects[ri].height());
-                int low = min(input_rects[ri].width(), input_rects[ri].height());
-                assert(!rect_states[ri].used());
-                rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 1 : 0;
-                rect_states[ri].pos = Pos(-low, y);
+                int high = max(rects[ri].width(), rects[ri].height());
+                int low = min(rects[ri].width(), rects[ri].height());
+                assert(!rects[ri].used());
+                if (rects[ri].width() > rects[ri].height())
+                    rects[ri].rotate();
+                rects[ri].set_pos(Pos(-low, y));
 
                 y += high;
             }
@@ -351,11 +350,12 @@ public:
             int y = 0;
             for (int ri : sides[order[3].second])
             {
-                int high = max(input_rects[ri].width(), input_rects[ri].height());
-                int low = min(input_rects[ri].width(), input_rects[ri].height());
-                assert(!rect_states[ri].used());
-                rect_states[ri].rotated = input_rects[ri].width() > input_rects[ri].height() ? 1 : 0;
-                rect_states[ri].pos = Pos(width, y);
+                int high = max(rects[ri].width(), rects[ri].height());
+                int low = min(rects[ri].width(), rects[ri].height());
+                assert(!rects[ri].used());
+                if (rects[ri].width() > rects[ri].height())
+                    rects[ri].rotate();
+                rects[ri].set_pos(Pos(width, y));
 
                 y += high;
             }
@@ -367,20 +367,18 @@ public:
         vector<int> res;
         rep(i, n)
         {
-            auto& s = rect_states[i];
-            assert(s.used());
-            res.push_back(s.pos.x);
-            res.push_back(s.pos.y);
-            res.push_back(s.rotated);
+            auto& r = rects[i];
+            assert(r.used());
+            res.push_back(r.pos().x);
+            res.push_back(r.pos().y);
+            res.push_back(r.rotated());
         }
         return res;
     }
 
 private:
     const int n;
-    vector<InputRect> input_rects;
-
-    vector<RectState> rect_states;
+    vector<Rect> rects;
 };
 
 
