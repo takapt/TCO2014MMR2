@@ -202,6 +202,8 @@ namespace std
 const int MAX_RANGE = ten(6);
 const int LOWER = -MAX_RANGE;
 const int UPPER = MAX_RANGE;
+const int MAX_SIDE_LEN = 1000;
+
 
 
 class Rect
@@ -224,15 +226,24 @@ public:
         rotated_ ^= true;
     }
 
+    int long_len() const { return max(w, h); }
+    int short_len() const { return min(w, h); }
+
+    void width_to_long()
+    {
+        if (w < h)
+            rotate();
+    }
+    void height_to_long()
+    {
+        if (w > h)
+            rotate();
+    }
+
     const Pos& pos() const { return pos_; }
     void set_pos(const Pos& pos)
     {
         pos_ = pos;
-    }
-
-    bool used() const
-    {
-        return pos_.x != -1919810;
     }
 
 private:
@@ -240,6 +251,173 @@ private:
     int index_;
     bool rotated_;
     Pos pos_;
+};
+
+
+class WeenCreater;
+class Ween
+{
+public:
+    Ween()
+        : pos_(Pos(0, 0))
+    {
+    }
+
+    const Pos& pos() const { return pos_; }
+    void set_pos(const Pos& pos)
+    {
+        Pos move = pos - pos_;
+        pos_ = pos;
+
+        rep(i, 4)
+            outer[i].set_pos(outer[i].pos() + move);
+        for (auto& rect : inner)
+            rect.set_pos(rect.pos() + move);
+    }
+
+    vector<Rect> rects() const
+    {
+        vector<Rect> res;
+        rep(i, 4)
+            res.push_back(outer[i]);
+        for (auto& rect : inner)
+            res.push_back(rect);
+
+        for (auto& rect : res)
+            rect.set_pos(pos_ + rect.pos());
+        return res;
+    }
+
+private:
+    // positions are relative to pos_
+    Rect outer[4];
+    vector<Rect> inner;
+
+    Pos pos_; // absolute pos in solution plane
+
+    friend WeenCreater;
+};
+class WeenCreater
+{
+public:
+    WeenCreater(){}
+    WeenCreater(const vector<Rect>& rects_)
+        : rects(rects_)
+    {
+        outer_cand.resize(rects.size());
+        rep(i, outer_cand.size())
+            outer_cand[i] = i;
+        sort(all(outer_cand), [&](int i, int j) { return rects[i].long_len() < rects[j].long_len(); });
+
+        // TODO: (long, index), (short, index)の両方をinner_candに突っ込んで決めたほうがいいか？
+        rep(i, rects.size())
+            inner_cand.insert(pint(rects[i].long_len(), i));
+    }
+
+    bool create(Ween& ween, vector<bool>& used)
+    {
+        ween = Ween();
+
+        //
+        rep(i, 4)
+        {
+            while (!outer_cand.empty() && used[rects[outer_cand.back()].index()])
+                outer_cand.pop_back();
+            if (outer_cand.empty())
+                return false;
+
+            ween.outer[i] = rects[outer_cand.back()];
+            outer_cand.pop_back();
+        }
+        rep(i, 4)
+            used[ween.outer[i].index()] = true;
+
+        // 
+        Rect& bottom = ween.outer[0];
+        bottom.width_to_long();
+
+        Rect& top = ween.outer[1];
+        top.width_to_long();
+
+        Rect& left = ween.outer[2];
+        left.height_to_long();
+
+        Rect& right = ween.outer[3];
+        right.height_to_long();
+
+        bottom.set_pos(Pos(0, -bottom.height()));
+        top.set_pos(Pos(0, right.height()));
+        left.set_pos(Pos(-left.width(), 0));
+        create_recur(right, top.width() + right.width() + 1, right.height(), MoveDir::X, ween, used);
+
+        return true;
+    }
+private:
+    enum MoveDir { X, Y };
+    void create_recur(Rect ween_rect, int width, int height, MoveDir move_dir, Ween& ween, vector<bool>& used)
+    {
+        if (move_dir == X)
+        {
+            const int next_width_range = width - ween_rect.width() - 1;
+            assert(next_width_range > 0);
+            Rect next_ween_rect;
+            if (!select_ween_rect(next_width_range, height - 2, next_ween_rect, used))
+                return;
+
+            next_ween_rect.width_to_long();
+            ween_rect.set_pos(Pos(next_ween_rect.width(), 0));
+            used[ween_rect.index()] = true;
+            ween.inner.push_back(ween_rect);
+
+            create_recur(next_ween_rect, next_ween_rect.width(), height, MoveDir::Y, ween, used);
+        }
+        else if (move_dir == Y)
+        {
+            const int next_height_range = height - ween_rect.height() - 1;
+            assert(next_height_range > 0);
+            Rect next_ween_rect;
+            if (!select_ween_rect(next_height_range, width - 2, next_ween_rect, used))
+                return;
+
+            next_ween_rect.height_to_long();
+            ween_rect.set_pos(Pos(0, next_ween_rect.height()));
+            used[ween_rect.index()] = true;
+            ween.inner.push_back(ween_rect);
+
+            create_recur(next_ween_rect, width, next_ween_rect.height(), MoveDir::X, ween, used);
+        }
+        else
+            abort();
+    }
+
+    bool select_ween_rect(int long_range, int short_range, Rect& selected_rect, vector<bool>& used)
+    {
+        for (auto it = inner_cand.lower_bound(pint(long_range, -1)); it != inner_cand.end(); )
+        {
+            auto next = it;
+            ++next;
+
+            auto& rect = rects[it->second];
+            assert(rect.long_len() <= long_range);
+
+            if (used[rect.index()])
+                inner_cand.erase(it);
+            else if (rect.short_len() <= short_range)
+            {
+                selected_rect = rect;
+                return true;
+            }
+
+            it = next;
+        }
+        return false;
+    }
+
+private:
+    vector<Rect> rects;
+
+    vector<int> outer_cand;
+    set<pint, greater<pint>> inner_cand; // pint(long_len, rects index)
 };
 
 class Solver
@@ -250,13 +428,23 @@ public:
     {
         rep(i, n)
             rects[i] = Rect(a[i], b[i], i);
+
+        ween_creater = WeenCreater(rects);
     }
 
     void solve()
     {
+        vector<bool> used(n);
+        Ween ween;
+        dump(ween_creater.create(ween, used));
+        ween.set_pos(Pos(-5000, -5000));
+        for (auto& rect : ween.rects())
+            rects[rect.index()] = rect;
+
         vector<int> len_order;
         rep(i, n)
-            len_order.push_back(i);
+            if (!used[i])
+                len_order.push_back(i);
         sort_by_long_side(len_order);
         reverse(all(len_order));
         make_big_square(len_order);
@@ -304,7 +492,6 @@ public:
             {
                 int high = max(rects[ri].width(), rects[ri].height());
                 int low = min(rects[ri].width(), rects[ri].height());
-                assert(!rects[ri].used());
                 if (rects[ri].width() < rects[ri].height())
                     rects[ri].rotate();
                 rects[ri].set_pos(Pos(x, -low));
@@ -320,7 +507,6 @@ public:
             {
                 int high = max(rects[ri].width(), rects[ri].height());
                 int low = min(rects[ri].width(), rects[ri].height());
-                assert(!rects[ri].used());
                 if (rects[ri].width() < rects[ri].height())
                     rects[ri].rotate();
                 rects[ri].set_pos(Pos(x, height));
@@ -336,7 +522,6 @@ public:
             {
                 int high = max(rects[ri].width(), rects[ri].height());
                 int low = min(rects[ri].width(), rects[ri].height());
-                assert(!rects[ri].used());
                 if (rects[ri].width() > rects[ri].height())
                     rects[ri].rotate();
                 rects[ri].set_pos(Pos(-low, y));
@@ -352,7 +537,6 @@ public:
             {
                 int high = max(rects[ri].width(), rects[ri].height());
                 int low = min(rects[ri].width(), rects[ri].height());
-                assert(!rects[ri].used());
                 if (rects[ri].width() > rects[ri].height())
                     rects[ri].rotate();
                 rects[ri].set_pos(Pos(width, y));
@@ -368,7 +552,6 @@ public:
         rep(i, n)
         {
             auto& r = rects[i];
-            assert(r.used());
             res.push_back(r.pos().x);
             res.push_back(r.pos().y);
             res.push_back(r.rotated());
@@ -379,6 +562,8 @@ public:
 private:
     const int n;
     vector<Rect> rects;
+
+    WeenCreater ween_creater;
 };
 
 
@@ -390,83 +575,6 @@ public:
         Solver solver(a, b);
         solver.solve();
         return solver.make_result();
-
-        const double G_TLE = 10 * 1000;
-        Timer g_timer;
-        g_timer.start();
-
-        this->a = a;
-        this->b = b;
-        n = a.size();
-
-//         map<int, int> freq;
-//         rep(i, n)
-//             ++freq[max(a[i], b[i])];
-//         for (auto it : freq)
-//             fprintf(stderr, "%3d: %d\n", it.first, it.second);
-
-        vector<int> len_order = sorted_by_len();
-        int cc = 0;
-        for (int i : len_order)
-        {
-            int low = min(a[i], b[i]);
-            int high = max(a[i], b[i]);
-            if (high / low > 2 || high < 100)
-            {
-                fprintf(stderr, "%3d, %3d\n", low, high);
-                ++cc;
-            }
-        }
-        dump(cc);
-        reverse(all(len_order));
-        make_big_square(len_order);
-
-        return make_result();
-
-        vector<int> best_res;
-        ll best_score = -114514;
-        pair<ll, ll> best_ha;
-        for (int tekito = 0; tekito <= n; tekito += 4)
-        {
-            if (g_timer.get_elapsed() > 9.8 * 1000)
-                break;
-
-            clr(rotate, -1);
-
-            vector<int> square, hole;
-            rep(i, n)
-            {
-                if (i < tekito)
-                    hole.push_back(len_order[i]);
-                else
-                    square.push_back(len_order[i]);
-            }
-
-            reverse(all(square));
-            make_big_square(square);
-            make_tekito_holes(hole);
-
-            assert(count(rotate, rotate + n, -1) == 0);
-            vector<int> res;
-            rep(i, n)
-            {
-                res.push_back(bottomleft[i].first);
-                res.push_back(bottomleft[i].second);
-                res.push_back(rotate[i]);
-            }
-
-            pair<ll, ll> ha = eval();
-            ll score = ha.first * ha.first * ha.second;
-            if (score > best_score)
-            {
-                best_score = score;
-                best_ha = ha;
-                best_res = make_result();
-
-                fprintf(stderr, "%4d: %3lld, %11lld -> %lld\n", tekito, ha.first, ha.second, score);
-            }
-        }
-        return best_res;
     }
 
     vector<int> make_result()
@@ -485,134 +593,6 @@ public:
             res.push_back(rotate[i]);
         }
         return res;
-    }
-
-    void make_big_square(vector<int> use_rects)
-    {
-        vector<int> sides[4];
-        int sum_len[4] = {};
-        for (int rect_i : use_rects)
-        {
-            int len = max(a[rect_i], b[rect_i]);
-            int k = min_element(sum_len, sum_len + 4) - sum_len;
-            sum_len[k] += len;
-            sides[k].push_back(rect_i);
-        }
-
-        pint order[4];
-        rep(i, 4)
-            order[i] = pint(sum_len[i], i);
-        sort(order, order + 4, greater<pint>());
-
-        const int width = order[1].first;
-        const int height = order[3].first;
-
-        // 0 bottom
-        {
-            int x = 0;
-            for (int ri : sides[order[0].second])
-            {
-                int high = max(a[ri], b[ri]);
-                int low = min(a[ri], b[ri]);
-                assert(rotate[ri] == -1);
-                rotate[ri] = a[ri] > b[ri] ? 0 : 1;
-                bottomleft[ri] = pint(x, -low);
-
-                x += high;
-            }
-        }
-
-        // 1 top
-        {
-            int x = 0;
-            for (int ri : sides[order[1].second])
-            {
-                int high = max(a[ri], b[ri]);
-                int low = min(a[ri], b[ri]);
-                assert(rotate[ri] == -1);
-                rotate[ri] = a[ri] > b[ri] ? 0 : 1;
-                bottomleft[ri] = pint(x, height);
-
-                x += high;
-            }
-        }
-
-        // 2 left
-        {
-            int y = 0;
-            for (int ri : sides[order[2].second])
-            {
-                int high = max(a[ri], b[ri]);
-                int low = min(a[ri], b[ri]);
-                assert(rotate[ri] == -1);
-                rotate[ri] = a[ri] > b[ri] ? 1 : 0;
-                bottomleft[ri] = pint(-low, y);
-
-                y += high;
-            }
-        }
-
-        // 3 right
-        {
-            int y = 0;
-            for (int ri : sides[order[3].second])
-            {
-                int high = max(a[ri], b[ri]);
-                int low = min(a[ri], b[ri]);
-                assert(rotate[ri] == -1);
-                rotate[ri] = a[ri] > b[ri] ? 1 : 0;
-                bottomleft[ri] = pint(width, y);
-
-                y += high;
-            }
-        }
-    }
-
-    void make_tekito_holes(vector<int> use_rects)
-    {
-        const int base_x = 200 * 1000;
-        int bx = base_x, by = 0;
-        for (int ui = 0; ui + 4 <= use_rects.size(); ui += 4)
-        {
-            rep(i, 4)
-                rotate[use_rects[ui + i]] = 0;
-            int bottom = use_rects[ui], left = use_rects[ui + 1], top = use_rects[ui + 2], right = use_rects[ui + 3];
-            bottomleft[bottom] = pint(bx, by - b[bottom]);
-            bottomleft[left] = pint(bx - a[left], by);
-            bottomleft[top] = pint(bx, by + min(b[left], b[right]));
-            if (a[bottom] > a[top])
-            {
-                bottomleft[right] = pint(bx + a[top], by);
-            }
-            else
-            {
-                bottomleft[right] = pint(bx + a[bottom], by + min(b[left], b[right]) - b[right]);
-            }
-
-            const int bd = 5 * 1000;
-            bx += bd;
-            if (bx >= base_x + 30 * bd)
-            {
-                bx = base_x;
-                by += bd;
-            }
-        }
-
-        rep(i, use_rects.size() % 4)
-        {
-            int k = use_rects[use_rects.size() - 1 - i];
-            rotate[k] = 0;
-            bottomleft[k] = pint(-2000, 2000 * i);
-        }
-    }
-
-    vector<int> sorted_by_len()
-    {
-        vector<int> order(n);
-        rep(i, n)
-            order[i] = i;
-        sort(all(order), [&](int i, int j) { return max(a[i], b[i]) < max(a[j], b[j]); });
-        return order;
     }
 
     pair<ll, ll> eval()
