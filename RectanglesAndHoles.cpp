@@ -272,10 +272,6 @@ public:
         Pos move = pos - pos_;
         pos_ = pos;
 
-//         rep(i, 4)
-//             outer[i].set_pos(outer[i].pos() + move);
-//         for (auto& rect : inner)
-//             rect.set_pos(rect.pos() + move);
         for (auto& rect : rects_)
             rect.set_pos(rect.pos() + move);
     }
@@ -283,10 +279,6 @@ public:
     vector<Rect> rects() const
     {
         vector<Rect> res;
-//         rep(i, 4)
-//             res.push_back(outer[i]);
-//         for (auto& rect : inner)
-//             res.push_back(rect);
         for (auto& rect : rects_)
             res.push_back(rect);
 
@@ -297,9 +289,6 @@ public:
 
 private:
     // positions are relative to pos_
-//     Rect outer[4];
-//     vector<Rect> inner;
-//     vector<Rect> inner;
     vector<Rect> rects_;
 
     Pos pos_; // absolute pos in solution plane
@@ -488,11 +477,7 @@ public:
         {
             Ween ween;
             if (!ween_creater.create(ween, used))
-            {
-//                 dump(ween_i);
                 break;
-            }
-//             dump(ween.rects().size());
 
             ween.set_pos(wp);
             for (auto& rect : ween.rects())
