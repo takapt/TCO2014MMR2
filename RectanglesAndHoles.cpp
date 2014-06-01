@@ -1,4 +1,4 @@
-// #define NDEBUG
+#define NDEBUG
 
 #include <cstdio>
 #include <cstdlib>
@@ -204,7 +204,10 @@ const int LOWER = -MAX_RANGE;
 const int UPPER = MAX_RANGE;
 const int MAX_SIDE_LEN = 1000;
 
-
+bool check_pos(const Pos& pos)
+{
+    return max(abs(pos.x), abs(pos.y)) <= MAX_RANGE;
+}
 
 class Rect
 {
@@ -269,18 +272,22 @@ public:
         Pos move = pos - pos_;
         pos_ = pos;
 
-        rep(i, 4)
-            outer[i].set_pos(outer[i].pos() + move);
-        for (auto& rect : inner)
+//         rep(i, 4)
+//             outer[i].set_pos(outer[i].pos() + move);
+//         for (auto& rect : inner)
+//             rect.set_pos(rect.pos() + move);
+        for (auto& rect : rects_)
             rect.set_pos(rect.pos() + move);
     }
 
     vector<Rect> rects() const
     {
         vector<Rect> res;
-        rep(i, 4)
-            res.push_back(outer[i]);
-        for (auto& rect : inner)
+//         rep(i, 4)
+//             res.push_back(outer[i]);
+//         for (auto& rect : inner)
+//             res.push_back(rect);
+        for (auto& rect : rects_)
             res.push_back(rect);
 
         for (auto& rect : res)
@@ -290,8 +297,10 @@ public:
 
 private:
     // positions are relative to pos_
-    Rect outer[4];
-    vector<Rect> inner;
+//     Rect outer[4];
+//     vector<Rect> inner;
+//     vector<Rect> inner;
+    vector<Rect> rects_;
 
     Pos pos_; // absolute pos in solution plane
 
@@ -318,6 +327,7 @@ public:
     {
         ween = Ween();
 
+        Rect outer[4];
         //
         rep(i, 4)
         {
@@ -326,29 +336,40 @@ public:
             if (outer_cand.empty())
                 return false;
 
-            ween.outer[i] = rects[outer_cand.back()];
+            outer[i] = rects[outer_cand.back()];
             outer_cand.pop_back();
         }
         rep(i, 4)
-            used[ween.outer[i].index()] = true;
+            used[outer[i].index()] = true;
 
         // 
-        Rect& bottom = ween.outer[0];
+        Rect& bottom = outer[0];
         bottom.width_to_long();
 
-        Rect& top = ween.outer[1];
+        Rect& top = outer[1];
         top.width_to_long();
 
-        Rect& left = ween.outer[2];
+        Rect& left = outer[2];
         left.height_to_long();
 
-        Rect& right = ween.outer[3];
+        Rect& right = outer[3];
         right.height_to_long();
 
         bottom.set_pos(Pos(0, -bottom.height()));
         top.set_pos(Pos(0, right.height()));
         left.set_pos(Pos(-left.width(), 0));
+        ween.rects_.push_back(bottom);
+        ween.rects_.push_back(top);
+        ween.rects_.push_back(left);
         create_recur(right, top.width() + right.width() + 1, right.height(), MoveDir::X, ween, used);
+
+#ifndef NDEBUG
+        rep(i, 4)
+        {
+            assert(used[ween.rects_[i].index()]);
+            assert(check_pos(ween.rects_[i].pos()));
+        }
+#endif
 
         return true;
     }
@@ -362,12 +383,17 @@ private:
             assert(next_width_range > 0);
             Rect next_ween_rect;
             if (!select_ween_rect(next_width_range, height - 2, next_ween_rect, used))
+            {
+                ween_rect.set_pos(Pos(1, 0));
+                used[ween_rect.index()] = true;
+                ween.rects_.push_back(ween_rect);
                 return;
+            }
 
             next_ween_rect.width_to_long();
             ween_rect.set_pos(Pos(next_ween_rect.width(), 0));
             used[ween_rect.index()] = true;
-            ween.inner.push_back(ween_rect);
+            ween.rects_.push_back(ween_rect);
 
             create_recur(next_ween_rect, next_ween_rect.width(), height, MoveDir::Y, ween, used);
         }
@@ -377,12 +403,17 @@ private:
             assert(next_height_range > 0);
             Rect next_ween_rect;
             if (!select_ween_rect(next_height_range, width - 2, next_ween_rect, used))
+            {
+                ween_rect.set_pos(Pos(0, 1));
+                used[ween_rect.index()] = true;
+                ween.rects_.push_back(ween_rect);
                 return;
+            }
 
             next_ween_rect.height_to_long();
             ween_rect.set_pos(Pos(0, next_ween_rect.height()));
             used[ween_rect.index()] = true;
-            ween.inner.push_back(ween_rect);
+            ween.rects_.push_back(ween_rect);
 
             create_recur(next_ween_rect, width, next_ween_rect.height(), MoveDir::X, ween, used);
         }
@@ -420,6 +451,23 @@ private:
     set<pint, greater<pint>> inner_cand; // pint(long_len, rects index)
 };
 
+class Score
+{
+public:
+    Score(int holes, ll area)
+        : holes_(holes), area_(area)
+    {
+    }
+
+    int holes() const { return holes_; }
+    ll area() const { return area_; }
+    ll score() const { return area_ * holes_ * holes_; }
+
+private:
+    int holes_;
+    ll area_;
+};
+
 class Solver
 {
 public:
@@ -432,37 +480,41 @@ public:
         ween_creater = WeenCreater(rects);
     }
 
-    void solve()
+    void solve(int weens)
     {
         vector<bool> used(n);
-        Ween ween;
-        dump(ween_creater.create(ween, used));
-        ween.set_pos(Pos(-5000, -5000));
-        for (auto& rect : ween.rects())
-            rects[rect.index()] = rect;
+        Pos wp(-5000, 0);
+        rep(ween_i, weens)
+        {
+            Ween ween;
+            if (!ween_creater.create(ween, used))
+            {
+//                 dump(ween_i);
+                break;
+            }
+//             dump(ween.rects().size());
+
+            ween.set_pos(wp);
+            for (auto& rect : ween.rects())
+            {
+                assert(used[rect.index()]);
+                assert(check_pos(rect.pos()));
+                rects[rect.index()] = rect;
+            }
+
+            assert(wp.y <= MAX_RANGE);
+            wp += Pos(-5000, 0);
+            if (wp.x < -5000 * 10)
+                wp = Pos(-5000, wp.y + 5000);
+        }
 
         vector<int> len_order;
         rep(i, n)
             if (!used[i])
                 len_order.push_back(i);
-        sort_by_long_side(len_order);
+        sort(all(len_order), [&](int i, int j) { return max(rects[i].width(), rects[i].height()) < max(rects[j].width(), rects[j].height()); });
         reverse(all(len_order));
         make_big_square(len_order);
-    }
-
-    bool check_rect_indices(const vector<int>& rect_i)
-    {
-        if (rect_i.empty())
-            return true;
-        auto v = rect_i;
-        uniq(v);
-        return v.size() == rect_i.size() && 0 <= v.front() && v.back() < n;
-    }
-
-    void sort_by_long_side(vector<int>& order)
-    {
-        assert(check_rect_indices(order));
-        sort(all(order), [&](int i, int j) { return max(rects[i].width(), rects[i].height()) < max(rects[j].width(), rects[j].height()); });
     }
 
     void make_big_square(vector<int> use_rects)
@@ -546,61 +598,11 @@ public:
         }
     }
 
-    vector<int> make_result()
-    {
-        vector<int> res;
-        rep(i, n)
-        {
-            auto& r = rects[i];
-            res.push_back(r.pos().x);
-            res.push_back(r.pos().y);
-            res.push_back(r.rotated());
-        }
-        return res;
-    }
-
-private:
-    const int n;
-    vector<Rect> rects;
-
-    WeenCreater ween_creater;
-};
-
-
-class RectanglesAndHoles
-{
-public:
-    vector<int> place(vector<int> a, vector<int> b)
-    {
-        Solver solver(a, b);
-        solver.solve();
-        return solver.make_result();
-    }
-
-    vector<int> make_result()
+    Score eval()
     {
 #ifndef NDEBUG
-        assert(count(rotate, rotate + n, -1) == 0);
-        rep(i, n)
-            assert(max(abs(bottomleft[i].first), abs(bottomleft[i].second)) <= MAX_RANGE);
-#endif
-
-        vector<int> res;
-        rep(i, n)
-        {
-            res.push_back(bottomleft[i].first);
-            res.push_back(bottomleft[i].second);
-            res.push_back(rotate[i]);
-        }
-        return res;
-    }
-
-    pair<ll, ll> eval()
-    {
-#ifndef NDEBUG
-        assert(count(rotate, rotate + n, -1) == 0);
-        rep(i, n)
-            assert(max(abs(bottomleft[i].first), abs(bottomleft[i].second)) <= MAX_RANGE);
+        for (auto& rect : rects)
+            assert(max(abs(rect.pos().x), abs(rect.pos().y)) <= MAX_RANGE);
 #endif
 
         vector<int> ux, uy;
@@ -608,14 +610,12 @@ public:
         ux.push_back(UPPER + 10);
         uy.push_back(LOWER - 10);
         uy.push_back(UPPER + 10);
-        rep(i, n)
+        for (auto& rect : rects)
         {
-            int w = rotate[i] == 0 ? a[i] : b[i];
-            int h = rotate[i] == 0 ? b[i] : a[i];
-            ux.push_back(bottomleft[i].first);
-            ux.push_back(bottomleft[i].first + w);
-            uy.push_back(bottomleft[i].second);
-            uy.push_back(bottomleft[i].second + h);
+            ux.push_back(rect.pos().x);
+            ux.push_back(rect.pos().x + rect.width());
+            uy.push_back(rect.pos().y);
+            uy.push_back(rect.pos().y + rect.height());
         }
         uniq(ux);
         uniq(uy);
@@ -624,14 +624,12 @@ public:
         const int RECT = -1919;
         static int c[2048][2048];
         clr(c, -1);
-        rep(i, n)
+        for (auto& rect : rects)
         {
-            int w = rotate[i] == 0 ? a[i] : b[i];
-            int h = rotate[i] == 0 ? b[i] : a[i];
-            int sx = lower_bound(all(ux), bottomleft[i].first) - ux.begin();
-            int ex = lower_bound(all(ux), bottomleft[i].first + w) - ux.begin();
-            int sy = lower_bound(all(uy), bottomleft[i].second) - uy.begin();
-            int ey = lower_bound(all(uy), bottomleft[i].second + h) - uy.begin();
+            int sx = lower_bound(all(ux), rect.pos().x) - ux.begin();
+            int ex = lower_bound(all(ux), rect.pos().x + rect.width()) - ux.begin();
+            int sy = lower_bound(all(uy), rect.pos().y) - uy.begin();
+            int ey = lower_bound(all(uy), rect.pos().y + rect.height()) - uy.begin();
 
             for (int y = sy; y < ey; ++y)
                 for (int x = sx; x < ex; ++x)
@@ -672,14 +670,59 @@ public:
             if (c[y][x] > 0)
                 area += (ll)(uy[y + 1] - uy[y]) * (ux[x + 1] - ux[x]);
         }
-        return pair<ll, ll>(holes, area);
+        return Score(holes, area);
     }
 
-    int n;
-    vector<int> a, b;
+    vector<int> make_result()
+    {
+        vector<int> res;
+        rep(i, n)
+        {
+            auto& r = rects[i];
+            res.push_back(r.pos().x);
+            res.push_back(r.pos().y);
+            res.push_back(r.rotated());
+        }
+        return res;
+    }
 
-    pint bottomleft[1024];
-    int rotate[1024];
+private:
+    const int n;
+    vector<Rect> rects;
+
+    WeenCreater ween_creater;
+};
+
+
+class RectanglesAndHoles
+{
+public:
+    vector<int> place(vector<int> a, vector<int> b)
+    {
+        const double G_TLE = 9.8 * 1000;
+        Timer g_timer;
+        g_timer.start();
+
+        const int n = a.size();
+        Score best_score(0, 0);
+        vector<int> best_res;
+        rep(weens, max(1, n / 4 + 1))
+        {
+            if (g_timer.get_elapsed() > G_TLE)
+                break;
+
+            Solver solver(a, b);
+            solver.solve(weens);
+            Score score = solver.eval();
+            if (score.score() > best_score.score())
+            {
+                best_score = score;
+                best_res = solver.make_result();
+//                 fprintf(stderr, "%3d: %3d, %13lld %lld\n", weens, score.holes(), score.area(), score.score());
+            }
+        }
+        return best_res;
+    }
 };
 
 
