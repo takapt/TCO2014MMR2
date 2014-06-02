@@ -1,4 +1,4 @@
-#define NDEBUG
+// #define NDEBUG
 
 #include <cstdio>
 #include <cstdlib>
@@ -306,10 +306,15 @@ public:
         rep(i, outer_cand.size())
             outer_cand[i] = i;
         sort(all(outer_cand), [&](int i, int j) { return rects[i].long_len() < rects[j].long_len(); });
+        rep(i, rects.size() / 2)
+            outer_cand.pop_back();
 
         // TODO: (long, index), (short, index)の両方をinner_candに突っ込んで決めたほうがいいか？
         rep(i, rects.size())
-            inner_cand.insert(pint(rects[i].long_len(), i));
+        {
+            if (double(rects[i].long_len()) / rects[i].short_len() > 2)
+                inner_cand.insert(pint(rects[i].long_len(), i));
+        }
     }
 
     bool create(Ween& ween, vector<bool>& used)
@@ -452,6 +457,9 @@ public:
     ll area() const { return area_; }
     ll score() const { return area_ * holes_ * holes_; }
 
+    ll darea;
+    ll dscore;
+    double hole_cost;
 private:
     int holes_;
     ll area_;
@@ -469,15 +477,29 @@ public:
         ween_creater = WeenCreater(rects);
     }
 
+    int ween_rect;
     void solve(int weens)
     {
+        ll waste_len = 0;
+        ween_rect = 0;
+
         vector<bool> used(n);
         Pos wp(-5000, 0);
         rep(ween_i, weens)
         {
+            if (count(all(used), true) >= weens)
+                break;
+
             Ween ween;
             if (!ween_creater.create(ween, used))
                 break;
+
+//             dump(ween.rects().size());
+
+            ween_rect += ween.rects().size();
+            waste_len += ween.rects()[0].long_len() + ween.rects()[2].short_len();
+
+//             dump(ween.rects().size());
 
             ween.set_pos(wp);
             for (auto& rect : ween.rects())
@@ -500,8 +522,24 @@ public:
         sort(all(len_order), [&](int i, int j) { return max(rects[i].width(), rects[i].height()) < max(rects[j].width(), rects[j].height()); });
         reverse(all(len_order));
         make_big_square(len_order);
+
+#if 1
+#if 0
+        for (int i : len_order)
+        {
+            auto& r = rects[i];
+            r.set_pos(Pos(0, 0));
+        }
+#endif
+
+        dwidth += waste_len / 4;
+        dheight += waste_len / 4;
+        darea = dwidth * dheight;
+#endif
     }
 
+    ll dwidth, dheight;
+    ll darea;
     void make_big_square(vector<int> use_rects)
     {
         vector<int> sides[4];
@@ -521,6 +559,7 @@ public:
 
         const int width = order[1].first;
         const int height = order[3].first;
+        dwidth = width, dheight = height;
 
         // 0 bottom
         {
@@ -655,7 +694,12 @@ public:
             if (c[y][x] > 0)
                 area += (ll)(uy[y + 1] - uy[y]) * (ux[x + 1] - ux[x]);
         }
-        return Score(holes, area);
+//         return Score(holes, area);
+        auto s = Score(holes, area);
+        s.darea = darea;
+        s.dscore = darea * s.holes() * s.holes();
+        s.hole_cost =  double(ween_rect) / s.holes();
+        return s;
     }
 
     vector<int> make_result()
@@ -688,13 +732,16 @@ public:
         Timer g_timer;
         g_timer.start();
 
+        Score prev(-111, 3);
         const int n = a.size();
         Score best_score(0, 0);
         vector<int> best_res;
-        rep(weens, max(1, n / 4 + 1))
+//         rep(weens, max(1, n / 4 + 1))
+        rep(weens, n + 1)
+//         int weens = 60;
         {
-            if (g_timer.get_elapsed() > G_TLE)
-                break;
+//             if (g_timer.get_elapsed() > G_TLE)
+//                 break;
 
             Solver solver(a, b);
             solver.solve(weens);
@@ -703,8 +750,17 @@ public:
             {
                 best_score = score;
                 best_res = solver.make_result();
-//                 fprintf(stderr, "%3d: %3d, %13lld %lld\n", weens, score.holes(), score.area(), score.score());
+                                fprintf(stderr, "%3d: %3d, %13lld %16lld !\n", weens, score.holes(), score.area(), score.score());
+                                dump(score.hole_cost);
+//                 fprintf(stderr, "%3d: %3d, %13lld[%13lld] %16lld[%16lld] !\n", weens, score.holes(), score.area(),score.darea,  score.score(), score.dscore);
             }
+            else
+            {
+                if (score.score() != prev.score())
+                                        fprintf(stderr, "%3d: %3d, %13lld %16lld\n", weens, score.holes(), score.area(), score.score());
+//                     fprintf(stderr, "%3d: %3d, %13lld[%13lld] %16lld[%16lld]\n", weens, score.holes(), score.area(),score.darea,  score.score(), score.dscore);
+            }
+                prev = score;
         }
         return best_res;
     }
