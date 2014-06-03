@@ -306,13 +306,11 @@ public:
         rep(i, outer_cand.size())
             outer_cand[i] = i;
         sort(all(outer_cand), [&](int i, int j) { return rects[i].long_len() < rects[j].long_len(); });
-        rep(i, rects.size() / 2)
-            outer_cand.pop_back();
 
         // TODO: (long, index), (short, index)の両方をinner_candに突っ込んで決めたほうがいいか？
         rep(i, rects.size())
         {
-            if (double(rects[i].long_len()) / rects[i].short_len() > 2)
+//             if (double(rects[i].long_len()) / rects[i].short_len() > 2)
                 inner_cand.insert(pint(rects[i].long_len(), i));
         }
     }
@@ -460,6 +458,7 @@ public:
     ll darea;
     ll dscore;
     double hole_cost;
+    int exp_holes;
 private:
     int holes_;
     ll area_;
@@ -478,26 +477,31 @@ public:
     }
 
     int ween_rect;
+    int exp_holes;
     void solve(int weens)
     {
         ll waste_len = 0;
         ween_rect = 0;
+        exp_holes = 1;
+        map<int, int> holes_log;
 
         vector<bool> used(n);
         Pos wp(-5000, 0);
         rep(ween_i, weens)
         {
-            if (count(all(used), true) >= weens)
-                break;
-
             Ween ween;
             if (!ween_creater.create(ween, used))
                 break;
 
 //             dump(ween.rects().size());
+//             for (auto& r : ween.rects())
+//                 fprintf(stderr, "(%4d, %4d)\n", r.long_len(), r.short_len());
+//             cerr << endl;
 
             ween_rect += ween.rects().size();
             waste_len += ween.rects()[0].long_len() + ween.rects()[2].short_len();
+            exp_holes += ween.rects().size() - 3;
+            holes_log[ween.rects().size() - 3]++;
 
 //             dump(ween.rects().size());
 
@@ -514,6 +518,17 @@ public:
             if (wp.x < -5000 * 10)
                 wp = Pos(-5000, wp.y + 5000);
         }
+        int num_ween = 0;
+        int sum_holes = 0;
+        for (auto& it : holes_log)
+        {
+            fprintf(stderr, "%3d: %2d\n", it.first, it.second);
+            sum_holes += it.first * it.second;
+            num_ween += it.second;
+        }
+        dump(num_ween);
+        dump(sum_holes);
+        dump(double(sum_holes) / num_ween);
 
         vector<int> len_order;
         rep(i, n)
@@ -699,6 +714,7 @@ public:
         s.darea = darea;
         s.dscore = darea * s.holes() * s.holes();
         s.hole_cost =  double(ween_rect) / s.holes();
+        s.exp_holes = exp_holes;
         return s;
     }
 
@@ -723,6 +739,7 @@ private:
 };
 
 
+int arg_weens = 10;
 class RectanglesAndHoles
 {
 public:
@@ -737,8 +754,8 @@ public:
         Score best_score(0, 0);
         vector<int> best_res;
 //         rep(weens, max(1, n / 4 + 1))
-        rep(weens, n + 1)
-//         int weens = 60;
+//         rep(weens, n + 1)
+        int weens = arg_weens;
         {
 //             if (g_timer.get_elapsed() > G_TLE)
 //                 break;
@@ -750,15 +767,15 @@ public:
             {
                 best_score = score;
                 best_res = solver.make_result();
-                                fprintf(stderr, "%3d: %3d, %13lld %16lld !\n", weens, score.holes(), score.area(), score.score());
+//                                 fprintf(stderr, "%3d: %3d, %13lld %16lld !\n", weens, score.holes(), score.area(), score.score());
                                 dump(score.hole_cost);
-//                 fprintf(stderr, "%3d: %3d, %13lld[%13lld] %16lld[%16lld] !\n", weens, score.holes(), score.area(),score.darea,  score.score(), score.dscore);
+                fprintf(stderr, "%3d: %3d[%3d], %13lld[%13lld] %16lld[%16lld] !\n", weens, score.holes(), score.exp_holes, score.area(),score.darea,  score.score(), score.dscore);
             }
             else
             {
                 if (score.score() != prev.score())
-                                        fprintf(stderr, "%3d: %3d, %13lld %16lld\n", weens, score.holes(), score.area(), score.score());
-//                     fprintf(stderr, "%3d: %3d, %13lld[%13lld] %16lld[%16lld]\n", weens, score.holes(), score.area(),score.darea,  score.score(), score.dscore);
+//                                         fprintf(stderr, "%3d: %3d, %13lld %16lld\n", weens, score.holes(), score.area(), score.score());
+                    fprintf(stderr, "%3d: %3d[%3d], %13lld[%13lld] %16lld[%16lld]\n", weens, score.holes(), score.exp_holes, score.area(),score.darea,  score.score(), score.dscore);
             }
                 prev = score;
         }
@@ -768,8 +785,11 @@ public:
 
 
 #ifdef LOCAL
-int main()
+int main(int argc, char** argv)
 {
+    if (argc > 1)
+        arg_weens = atoi(argv[1]);
+
     int n;
     cin >> n;
     vector<int> a(n), b(n);
