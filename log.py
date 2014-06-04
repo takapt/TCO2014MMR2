@@ -30,7 +30,7 @@ def get_score(seed):
 
 
 try:
-    for seed in range(1, 100):
+    for seed in range(1, 1000):
         result = get_score(seed)
         print('{:4d} {:5d} {:.3f}'.format(seed, result['score'], result['time']))
         sys.stdout.flush()

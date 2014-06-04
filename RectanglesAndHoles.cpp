@@ -1,4 +1,4 @@
-// #define NDEBUG
+#define NDEBUG
 
 #include <cstdio>
 #include <cstdlib>
@@ -38,8 +38,8 @@ template <typename T> ostream& operator<<(ostream& os, const deque<T>& c) { prin
 template <typename T, typename U> ostream& operator<<(ostream& os, const map<T, U>& c) { print_container(os, c); return os; }
 template <typename T, typename U> ostream& operator<<(ostream& os, const pair<T, U>& p) { os << "(" << p.first << ", " << p.second << ")"; return os; }
 
-template <typename T> void print(T a, int n, const string& split = " ") { for (int i = 0; i < n; i++) { cout << a[i]; if (i + 1 != n) cout << split; } cout << endl; }
-template <typename T> void print2d(T a, int w, int h, int width = -1, int br = 0) { for (int i = 0; i < h; ++i) { for (int j = 0; j < w; ++j) { if (width != -1) cout.width(width); cout << a[i][j] << ' '; } cout << endl; } while (br--) cout << endl; }
+template <typename T> void print(T a, int n, const string& split = " ") { for (int i = 0; i < n; i++) { cerr << a[i]; if (i + 1 != n) cerr << split; } cerr << endl; }
+template <typename T> void print2d(T a, int w, int h, int width = -1, int br = 0) { for (int i = 0; i < h; ++i) { for (int j = 0; j < w; ++j) { if (width != -1) cerr.width(width); cerr << a[i][j] << ' '; } cerr << endl; } while (br--) cerr << endl; }
 template <typename T> void input(T& a, int n) { for (int i = 0; i < n; ++i) cin >> a[i]; }
 #define dump(v) (cerr << #v << ": " << v << endl)
 
@@ -249,6 +249,12 @@ public:
         pos_ = pos;
     }
 
+    bool intersect(const Rect& other) const
+    {
+        return pos().x < other.pos().x + other.width() && other.pos().x < pos().x + width() &&
+        pos().y < other.pos().y + other.height() && other.pos().y < pos().y + height();
+    }
+
 private:
     int w, h;
     int index_;
@@ -257,197 +263,6 @@ private:
 };
 
 
-class WeenCreater;
-class Ween
-{
-public:
-    Ween()
-        : pos_(Pos(0, 0))
-    {
-    }
-
-    const Pos& pos() const { return pos_; }
-    void set_pos(const Pos& pos)
-    {
-        Pos move = pos - pos_;
-        pos_ = pos;
-
-        for (auto& rect : rects_)
-            rect.set_pos(rect.pos() + move);
-    }
-
-    vector<Rect> rects() const
-    {
-        vector<Rect> res;
-        for (auto& rect : rects_)
-            res.push_back(rect);
-
-        for (auto& rect : res)
-            rect.set_pos(pos_ + rect.pos());
-        return res;
-    }
-
-private:
-    // positions are relative to pos_
-    vector<Rect> rects_;
-
-    Pos pos_; // absolute pos in solution plane
-
-    friend WeenCreater;
-};
-class WeenCreater
-{
-public:
-    WeenCreater(){}
-    WeenCreater(const vector<Rect>& rects_)
-        : rects(rects_)
-    {
-        vector<int> sorted;
-        rep(i, rects.size())
-            sorted.push_back(i);
-        sort(all(sorted), [&](int i, int j) { return rects[i].long_len() < rects[j].long_len(); });
-        sorted.erase(sorted.begin() + rects.size() * 3 / 4, sorted.end());
-
-        for (int i : sorted)
-            outer_cand.push_back(sorted[i]);
-        sort(all(outer_cand), [&](int i, int j) { return rects[i].long_len() < rects[j].long_len(); });
-
-        // TODO: (long, index), (short, index)の両方をinner_candに突っ込んで決めたほうがいいか？
-//         rep(i, rects.size())
-        for (int i : sorted)
-        {
-            if (double(rects[i].long_len()) / rects[i].short_len() > 2)
-                inner_cand.insert(pint(rects[i].long_len(), i));
-        }
-    }
-
-    bool create(Ween& ween, vector<bool>& used)
-    {
-        ween = Ween();
-
-        Rect outer[4];
-        //
-        rep(i, 4)
-        {
-            while (!outer_cand.empty() && used[rects[outer_cand.back()].index()])
-                outer_cand.pop_back();
-            if (outer_cand.empty())
-                return false;
-
-            outer[i] = rects[outer_cand.back()];
-            outer_cand.pop_back();
-        }
-        rep(i, 4)
-            used[outer[i].index()] = true;
-
-        // 
-        Rect& bottom = outer[0];
-        bottom.width_to_long();
-
-        Rect& top = outer[1];
-        top.width_to_long();
-
-        Rect& left = outer[2];
-        left.height_to_long();
-
-        Rect& right = outer[3];
-        right.height_to_long();
-
-        bottom.set_pos(Pos(0, -bottom.height()));
-        top.set_pos(Pos(0, right.height()));
-        left.set_pos(Pos(-left.width(), 0));
-        ween.rects_.push_back(bottom);
-        ween.rects_.push_back(top);
-        ween.rects_.push_back(left);
-        create_recur(right, top.width() + right.width() + 1, right.height(), MoveDir::X, ween, used);
-
-#ifndef NDEBUG
-        rep(i, 4)
-        {
-            assert(used[ween.rects_[i].index()]);
-            assert(check_pos(ween.rects_[i].pos()));
-        }
-#endif
-
-        return true;
-    }
-private:
-    enum MoveDir { X, Y };
-    void create_recur(Rect ween_rect, int width, int height, MoveDir move_dir, Ween& ween, vector<bool>& used)
-    {
-        if (move_dir == X)
-        {
-            const int next_width_range = width - ween_rect.width() - 1;
-            assert(next_width_range > 0);
-            Rect next_ween_rect;
-            if (!select_ween_rect(next_width_range, height - 2, next_ween_rect, used))
-            {
-                ween_rect.set_pos(Pos(1, 0));
-                used[ween_rect.index()] = true;
-                ween.rects_.push_back(ween_rect);
-                return;
-            }
-
-            next_ween_rect.width_to_long();
-            ween_rect.set_pos(Pos(next_ween_rect.width(), 0));
-            used[ween_rect.index()] = true;
-            ween.rects_.push_back(ween_rect);
-
-            create_recur(next_ween_rect, next_ween_rect.width(), height, MoveDir::Y, ween, used);
-        }
-        else if (move_dir == Y)
-        {
-            const int next_height_range = height - ween_rect.height() - 1;
-            assert(next_height_range > 0);
-            Rect next_ween_rect;
-            if (!select_ween_rect(next_height_range, width - 2, next_ween_rect, used))
-            {
-                ween_rect.set_pos(Pos(0, 1));
-                used[ween_rect.index()] = true;
-                ween.rects_.push_back(ween_rect);
-                return;
-            }
-
-            next_ween_rect.height_to_long();
-            ween_rect.set_pos(Pos(0, next_ween_rect.height()));
-            used[ween_rect.index()] = true;
-            ween.rects_.push_back(ween_rect);
-
-            create_recur(next_ween_rect, width, next_ween_rect.height(), MoveDir::X, ween, used);
-        }
-        else
-            abort();
-    }
-
-    bool select_ween_rect(int long_range, int short_range, Rect& selected_rect, vector<bool>& used)
-    {
-        for (auto it = inner_cand.lower_bound(pint(long_range, -1)); it != inner_cand.end(); )
-        {
-            auto next = it;
-            ++next;
-
-            auto& rect = rects[it->second];
-            assert(rect.long_len() <= long_range);
-
-            if (used[rect.index()])
-                inner_cand.erase(it);
-            else if (rect.short_len() <= short_range)
-            {
-                selected_rect = rect;
-                return true;
-            }
-
-            it = next;
-        }
-        return false;
-    }
-
-private:
-    vector<Rect> rects;
-
-    vector<int> outer_cand;
-    set<pint, greater<pint>> inner_cand; // pint(long_len, rects index)
-};
 
 class Score
 {
@@ -460,12 +275,6 @@ public:
     int holes() const { return holes_; }
     ll area() const { return area_; }
     ll score() const { return area_ * holes_ * holes_; }
-
-    ll darea;
-    ll dscore;
-    double hole_cost;
-    int exp_holes;
-    int used_rects;
 private:
     int holes_;
     ll area_;
@@ -475,100 +284,88 @@ class Solver
 {
 public:
     Solver(vector<int> a, vector<int> b)
-        : n(a.size()), rects(n)
+        : n(a.size()), rects(n), used(n)
     {
         rep(i, n)
             rects[i] = Rect(a[i], b[i], i);
-
-        ween_creater = WeenCreater(rects);
     }
 
-    int ween_rect;
-    int exp_holes;
-    int used_rects;
-    void solve(int weens)
+    void solve(int num_teeth)
     {
-        ll waste_len = 0;
-        ween_rect = 0;
-        exp_holes = 1;
-        used_rects = 0;
-        map<int, int> holes_log;
+        make_teeth(num_teeth);
 
-        vector<bool> used(n);
-        Pos wp(-5000, 0);
-        rep(ween_i, weens)
-        {
-            Ween ween;
-            if (!ween_creater.create(ween, used))
-                break;
-
-//             dump(ween.rects().size());
-//             for (auto& r : ween.rects())
-//                 fprintf(stderr, "(%4d, %4d)\n", r.long_len(), r.short_len());
-//             cerr << endl;
-
-            ween_rect += ween.rects().size();
-            waste_len += ween.rects()[0].long_len() + ween.rects()[2].short_len();
-            exp_holes += ween.rects().size() - 3;
-            holes_log[ween.rects().size() - 3]++;
-            used_rects += ween.rects().size();
-
-//             dump(ween.rects().size());
-
-            ween.set_pos(wp);
-            for (auto& rect : ween.rects())
-            {
-                assert(used[rect.index()]);
-                assert(check_pos(rect.pos()));
-                rects[rect.index()] = rect;
-            }
-
-            assert(wp.y <= MAX_RANGE);
-            wp += Pos(-5000, 0);
-            if (wp.x < -5000 * sqrt(weens))
-                wp = Pos(-5000, wp.y + 5000);
-        }
-#if 0
-        int num_ween = 0;
-        int sum_holes = 0;
-        for (auto& it : holes_log)
-        {
-            fprintf(stderr, "%3d: %2d\n", it.first, it.second);
-            sum_holes += it.first * it.second;
-            num_ween += it.second;
-        }
-        dump(num_ween);
-        dump(sum_holes);
-        dump(double(sum_holes) / num_ween);
-#endif
-
-        vector<int> len_order;
+        vector<int> sq;
         rep(i, n)
             if (!used[i])
-                len_order.push_back(i);
-        sort(all(len_order), [&](int i, int j) { return max(rects[i].width(), rects[i].height()) < max(rects[j].width(), rects[j].height()); });
-        reverse(all(len_order));
-        make_big_square(len_order);
-
-#if 1
-#if 0
-        for (int i : len_order)
-        {
-            auto& r = rects[i];
-            r.set_pos(Pos(0, 0));
-        }
-#endif
-
-        dwidth += waste_len / 4;
-        dheight += waste_len / 4;
-        darea = dwidth * dheight;
-#endif
+                sq.push_back(i);
+        make_big_square(sq);
     }
 
-    ll dwidth, dheight;
-    ll darea;
+    void make_teeth(int num_teeth)
+    {
+        if (num_teeth == 0)
+            return;
+
+        vector<int> long_order;
+        rep(i, n)
+            long_order.push_back(i);
+        sort(all(long_order), [&](int i, int j) { return rects[i].long_len() < rects[j].long_len(); });
+
+        vector<int> use_rects;
+        rep(i, num_teeth)
+        {
+            assert(!used[long_order[i]]);
+            use_rects.push_back(long_order[i]);
+        }
+        sort(all(use_rects), [&](int i, int j) { return rects[i].long_len() < rects[j].long_len(); });
+
+        int need_height = 0;
+        int fix_width = -1;
+        for (int i : use_rects)
+        {
+            auto& r = rects[i];
+            r.width_to_long();
+            upmax(fix_width, r.width() + 1);
+            need_height += r.height();
+        }
+        need_height -= rects[use_rects.back()].height();
+
+        const int start_y = 0;
+        for (int i = 0, j = sz(use_rects) - 1, y = start_y; i <= j; ++i, --j)
+        {
+            {
+                auto& a = rects[use_rects[i]];
+                assert(!used[a.index()]);
+                used[a.index()] = true;
+                a.set_pos(Pos(fix_width - a.width(), y));
+                y += a.height();
+            }
+
+            if (i < j)
+            {
+                auto& b = rects[use_rects[j]];
+                assert(!used[b.index()]);
+                used[b.index()] = true;
+                b.set_pos(Pos(0, y));
+                y += b.height();
+            }
+        }
+
+        for (int i = num_teeth, y = 0; i < n && y < need_height; ++i)
+        {
+            auto& r = rects[long_order[i]];
+            assert(!used[r.index()]);
+            used[r.index()] = true;
+
+            r.height_to_long();
+            r.set_pos(Pos(fix_width, y));
+            y += r.height();
+        }
+    }
+
     void make_big_square(vector<int> use_rects)
     {
+        sort(all(use_rects), [&](int i, int j) { return rects[i].long_len() < rects[j].long_len(); });
         vector<int> sides[4];
         int sum_len[4] = {};
         for (int rect_i : use_rects)
@@ -586,7 +383,6 @@ public:
 
         const int width = order[1].first;
         const int height = order[3].first;
-        dwidth = width, dheight = height;
 
         // 0 bottom
         {
@@ -656,6 +452,10 @@ public:
             assert(max(abs(rect.pos().x), abs(rect.pos().y)) <= MAX_RANGE);
 #endif
 
+        rep(j, n) rep(i, j)
+            if (rects[i].intersect(rects[j]))
+                return Score(0, 0);
+
         vector<int> ux, uy;
         ux.push_back(LOWER - 10);
         ux.push_back(UPPER + 10);
@@ -723,11 +523,6 @@ public:
         }
 //         return Score(holes, area);
         auto s = Score(holes, area);
-        s.darea = darea;
-        s.dscore = darea * s.holes() * s.holes();
-        s.hole_cost =  double(ween_rect) / (s.holes() - 1);
-        s.exp_holes = exp_holes;
-        s.used_rects = used_rects;
         return s;
     }
 
@@ -747,77 +542,16 @@ public:
 private:
     const int n;
     vector<Rect> rects;
-
-    WeenCreater ween_creater;
+    vector<bool> used;
 };
 
 
-void test(vector<int> a, vector<int> b)
-{
-    const int n = a.size();
-    vector<int> len;
-    rep(i, n)
-//         len.push_back(max(a[i], b[i]));
-        len.push_back(sqrt(a[i] * a[i] + b[i] * b[i]));
-    sort(all(len));
-
-    Score best(0, 0);
-    rep(i, n)
-    {
-        ll peri = 0;
-        int holes = 1 + i / 1.2;
-//         for (int j = 0; j < i; ++j)
-//             peri += len[j] / 2;
-        for (int j = i; j < n; ++j)
-            peri += len[j];
-
-        ll side = peri / 4;
-        ll area = side * side;
-        Score s(holes, area);
-        if (s.score() > best.score())
-        {
-            best = s;
-            fprintf(stderr, "%3d %10lld %13lld\n", holes, area, s.score());
-        }
-    }
-}
-void test2(vector<int> a, vector<int> b)
-{
-    const int n = a.size();
-    vector<int> len;
-    rep(i, n)
-        len.push_back(max(a[i], b[i]));
-//         len.push_back(sqrt(a[i] * a[i] + b[i] * b[i]));
-    sort(all(len));
-    if (n & 1)
-        len.push_back(0);
-
-    Score best(0, 0);
-    ll peri = accumulate(all(len), 0LL);
-    int holes = 1;
-    for (int i = 0; i < n; i += 2)
-    {
-        ll side = peri / 4;
-        ll area = side * side;
-        Score s(holes, area);
-        if (s.score() > best.score())
-        {
-            best = s;
-            fprintf(stderr, "%3d %10lld %13lld\n", holes, area, s.score());
-        }
-
-        peri -= len[i + 1];
-        ++holes;
-    }
-}
-
-int arg_weens = 10;
 class RectanglesAndHoles
 {
 public:
     vector<int> place(vector<int> a, vector<int> b)
     {
-        const double G_TLE = 9.8 * 1000;
+        const double G_TLE = 9.7 * 1000;
         Timer g_timer;
         g_timer.start();
 
@@ -825,34 +559,34 @@ public:
         const int n = a.size();
         Score best_score(0, 0);
         vector<int> best_res;
-        rep(weens, max(1, n / 4 + 1))
-//         rep(weens, n + 1)
-//         int weens = arg_weens;
+//         rep(teeth, n)
+        for (int teeth = n / 3; teeth < n; ++teeth)
         {
 //             if (g_timer.get_elapsed() > G_TLE)
 //                 break;
 
             Solver solver(a, b);
-            solver.solve(weens);
+            solver.solve(teeth);
             Score score = solver.eval();
+            if (teeth > n / 10 && score.score() == 0)
+            {
+                dump(teeth);
+                break;
+            }
+
             if (score.score() > best_score.score())
             {
                 best_score = score;
                 best_res = solver.make_result();
-//                                 fprintf(stderr, "%3d: %3d, %13lld %16lld !\n", weens, score.holes(), score.area(), score.score());
-//                                 dump(score.hole_cost);
-                fprintf(stderr, "%3d(%3d): %3d[%3d] %+3d %.3f, %11lld[%11lld] %16lld[%16lld] !\n", weens, score.used_rects, score.holes(), score.exp_holes, score.holes() - prev.holes(), score.hole_cost, score.area(),score.darea,  score.score(), score.dscore);
+                                fprintf(stderr, "%3d: %3d, %13lld %16lld !\n", teeth, score.holes(), score.area(), score.score());
             }
             else
             {
                 if (score.score() != prev.score())
-//                                         fprintf(stderr, "%3d: %3d, %11lld %16lld\n", weens, score.holes(), score.area(), score.score());
-                fprintf(stderr, "%3d(%3d): %3d[%3d] %+3d %.3f, %11lld[%11lld] %16lld[%16lld]\n", weens, score.used_rects, score.holes(), score.exp_holes, score.holes() - prev.holes(), score.hole_cost, score.area(),score.darea,  score.score(), score.dscore);
+                                        fprintf(stderr, "%3d: %3d, %13lld %16lld\n", teeth, score.holes(), score.area(), score.score());
             }
                 prev = score;
         }
-
-        test2(a, b);
 
         return best_res;
     }
@@ -862,9 +596,6 @@ public:
 #ifdef LOCAL
 int main(int argc, char** argv)
 {
-    if (argc > 1)
-        arg_weens = atoi(argv[1]);
-
     int n;
     cin >> n;
     vector<int> a(n), b(n);
