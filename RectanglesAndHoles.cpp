@@ -302,15 +302,21 @@ public:
     WeenCreater(const vector<Rect>& rects_)
         : rects(rects_)
     {
-        outer_cand.resize(rects.size());
-        rep(i, outer_cand.size())
-            outer_cand[i] = i;
+        vector<int> sorted;
+        rep(i, rects.size())
+            sorted.push_back(i);
+        sort(all(sorted), [&](int i, int j) { return rects[i].long_len() < rects[j].long_len(); });
+        sorted.erase(sorted.begin() + rects.size() * 3 / 4, sorted.end());
+
+        for (int i : sorted)
+            outer_cand.push_back(sorted[i]);
         sort(all(outer_cand), [&](int i, int j) { return rects[i].long_len() < rects[j].long_len(); });
 
         // TODO: (long, index), (short, index)の両方をinner_candに突っ込んで決めたほうがいいか？
-        rep(i, rects.size())
+//         rep(i, rects.size())
+        for (int i : sorted)
         {
-//             if (double(rects[i].long_len()) / rects[i].short_len() > 2)
+            if (double(rects[i].long_len()) / rects[i].short_len() > 2)
                 inner_cand.insert(pint(rects[i].long_len(), i));
         }
     }
@@ -459,6 +465,7 @@ public:
     ll dscore;
     double hole_cost;
     int exp_holes;
+    int used_rects;
 private:
     int holes_;
     ll area_;
@@ -478,11 +485,13 @@ public:
 
     int ween_rect;
     int exp_holes;
+    int used_rects;
     void solve(int weens)
     {
         ll waste_len = 0;
         ween_rect = 0;
         exp_holes = 1;
+        used_rects = 0;
         map<int, int> holes_log;
 
         vector<bool> used(n);
@@ -502,6 +511,7 @@ public:
             waste_len += ween.rects()[0].long_len() + ween.rects()[2].short_len();
             exp_holes += ween.rects().size() - 3;
             holes_log[ween.rects().size() - 3]++;
+            used_rects += ween.rects().size();
 
 //             dump(ween.rects().size());
 
@@ -515,9 +525,10 @@ public:
 
             assert(wp.y <= MAX_RANGE);
             wp += Pos(-5000, 0);
-            if (wp.x < -5000 * 10)
+            if (wp.x < -5000 * sqrt(weens))
                 wp = Pos(-5000, wp.y + 5000);
         }
+#if 0
         int num_ween = 0;
         int sum_holes = 0;
         for (auto& it : holes_log)
@@ -529,6 +540,7 @@ public:
         dump(num_ween);
         dump(sum_holes);
         dump(double(sum_holes) / num_ween);
+#endif
 
         vector<int> len_order;
         rep(i, n)
@@ -713,8 +725,9 @@ public:
         auto s = Score(holes, area);
         s.darea = darea;
         s.dscore = darea * s.holes() * s.holes();
-        s.hole_cost =  double(ween_rect) / s.holes();
+        s.hole_cost =  double(ween_rect) / (s.holes() - 1);
         s.exp_holes = exp_holes;
+        s.used_rects = used_rects;
         return s;
     }
 
@@ -739,6 +752,65 @@ private:
 };
 
 
+void test(vector<int> a, vector<int> b)
+{
+    const int n = a.size();
+    vector<int> len;
+    rep(i, n)
+//         len.push_back(max(a[i], b[i]));
+        len.push_back(sqrt(a[i] * a[i] + b[i] * b[i]));
+    sort(all(len));
+
+    Score best(0, 0);
+    rep(i, n)
+    {
+        ll peri = 0;
+        int holes = 1 + i / 1.2;
+//         for (int j = 0; j < i; ++j)
+//             peri += len[j] / 2;
+        for (int j = i; j < n; ++j)
+            peri += len[j];
+
+        ll side = peri / 4;
+        ll area = side * side;
+        Score s(holes, area);
+        if (s.score() > best.score())
+        {
+            best = s;
+            fprintf(stderr, "%3d %10lld %13lld\n", holes, area, s.score());
+        }
+    }
+}
+void test2(vector<int> a, vector<int> b)
+{
+    const int n = a.size();
+    vector<int> len;
+    rep(i, n)
+        len.push_back(max(a[i], b[i]));
+//         len.push_back(sqrt(a[i] * a[i] + b[i] * b[i]));
+    sort(all(len));
+    if (n & 1)
+        len.push_back(0);
+
+    Score best(0, 0);
+    ll peri = accumulate(all(len), 0LL);
+    int holes = 1;
+    for (int i = 0; i < n; i += 2)
+    {
+        ll side = peri / 4;
+        ll area = side * side;
+        Score s(holes, area);
+        if (s.score() > best.score())
+        {
+            best = s;
+            fprintf(stderr, "%3d %10lld %13lld\n", holes, area, s.score());
+        }
+
+        peri -= len[i + 1];
+        ++holes;
+    }
+}
+
 int arg_weens = 10;
 class RectanglesAndHoles
 {
@@ -749,13 +821,13 @@ public:
         Timer g_timer;
         g_timer.start();
 
-        Score prev(-111, 3);
+        Score prev(0, 0);
         const int n = a.size();
         Score best_score(0, 0);
         vector<int> best_res;
-//         rep(weens, max(1, n / 4 + 1))
+        rep(weens, max(1, n / 4 + 1))
 //         rep(weens, n + 1)
-        int weens = arg_weens;
+//         int weens = arg_weens;
         {
 //             if (g_timer.get_elapsed() > G_TLE)
 //                 break;
@@ -768,17 +840,20 @@ public:
                 best_score = score;
                 best_res = solver.make_result();
 //                                 fprintf(stderr, "%3d: %3d, %13lld %16lld !\n", weens, score.holes(), score.area(), score.score());
-                                dump(score.hole_cost);
-                fprintf(stderr, "%3d: %3d[%3d], %13lld[%13lld] %16lld[%16lld] !\n", weens, score.holes(), score.exp_holes, score.area(),score.darea,  score.score(), score.dscore);
+//                                 dump(score.hole_cost);
+                fprintf(stderr, "%3d(%3d): %3d[%3d] %+3d %.3f, %11lld[%11lld] %16lld[%16lld] !\n", weens, score.used_rects, score.holes(), score.exp_holes, score.holes() - prev.holes(), score.hole_cost, score.area(),score.darea,  score.score(), score.dscore);
             }
             else
             {
                 if (score.score() != prev.score())
-//                                         fprintf(stderr, "%3d: %3d, %13lld %16lld\n", weens, score.holes(), score.area(), score.score());
-                    fprintf(stderr, "%3d: %3d[%3d], %13lld[%13lld] %16lld[%16lld]\n", weens, score.holes(), score.exp_holes, score.area(),score.darea,  score.score(), score.dscore);
+//                                         fprintf(stderr, "%3d: %3d, %11lld %16lld\n", weens, score.holes(), score.area(), score.score());
+                fprintf(stderr, "%3d(%3d): %3d[%3d] %+3d %.3f, %11lld[%11lld] %16lld[%16lld]\n", weens, score.used_rects, score.holes(), score.exp_holes, score.holes() - prev.holes(), score.hole_cost, score.area(),score.darea,  score.score(), score.dscore);
             }
                 prev = score;
         }
+
+        test2(a, b);
+
         return best_res;
     }
 };
